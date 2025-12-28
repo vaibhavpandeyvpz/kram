@@ -301,13 +301,15 @@ class MigrationManagerTest extends TestCase
      */
     private function createPhpMigration(string $version, string $className, string $upSql, string $downSql): void
     {
+        // Make class name unique to avoid conflicts when tests run with data providers
+        $uniqueClassName = $className.'_'.uniqid();
         $code = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class {$className} implements MigrationInterface
+class {$uniqueClassName} implements MigrationInterface
 {
     public function up(ConnectionInterface \$connection): bool
     {
@@ -320,7 +322,7 @@ class {$className} implements MigrationInterface
     }
 }
 PHP;
-        file_put_contents("{$this->migrationsDir}/{$version}_{$className}.php", $code);
+        file_put_contents("{$this->migrationsDir}/{$version}_{$uniqueClassName}.php", $code);
     }
 
     /**
