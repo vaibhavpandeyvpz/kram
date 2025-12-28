@@ -26,6 +26,26 @@ use PHPUnit\Framework\TestCase;
 class MigrationRepositoryTest extends TestCase
 {
     /**
+     * Clean up migrations table before each test.
+     */
+    private function cleanupMigrationsTable(ConnectionInterface $connection, ?string $tableName = null): void
+    {
+        $table = $tableName ?? 'kram_migrations';
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+
+        try {
+            $escapedTable = $connection->escape($table, \Databoss\EscapeMode::COLUMN_OR_TABLE);
+            match ($driver) {
+                'mysql', 'pgsql' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                'sqlite' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                default => null,
+            };
+        } catch (\Throwable) {
+            // Ignore errors - table might not exist
+        }
+    }
+
+    /**
      * @dataProvider provideConnection
      */
     public function test_initialize(ConnectionInterface $connection): void
@@ -40,6 +60,7 @@ class MigrationRepositoryTest extends TestCase
      */
     public function test_record_and_check_execution(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         $repository = new MigrationRepository($connection);
         $repository->initialize();
 
@@ -53,6 +74,7 @@ class MigrationRepositoryTest extends TestCase
      */
     public function test_remove_execution(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         $repository = new MigrationRepository($connection);
         $repository->initialize();
 
@@ -68,6 +90,7 @@ class MigrationRepositoryTest extends TestCase
      */
     public function test_get_executed_versions(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         $repository = new MigrationRepository($connection);
         $repository->initialize();
 
@@ -87,6 +110,7 @@ class MigrationRepositoryTest extends TestCase
      */
     public function test_get_latest_version(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         $repository = new MigrationRepository($connection);
         $repository->initialize();
 
@@ -105,6 +129,7 @@ class MigrationRepositoryTest extends TestCase
     public function test_custom_table_name(ConnectionInterface $connection): void
     {
         $customTable = 'custom_migrations';
+        $this->cleanupMigrationsTable($connection, $customTable);
         $repository = new MigrationRepository($connection, $customTable);
         $repository->initialize();
 

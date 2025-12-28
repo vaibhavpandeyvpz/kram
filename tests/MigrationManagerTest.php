@@ -28,6 +28,26 @@ class MigrationManagerTest extends TestCase
 {
     private string $migrationsDir;
 
+    /**
+     * Clean up migrations table before each test.
+     */
+    private function cleanupMigrationsTable(ConnectionInterface $connection, ?string $tableName = null): void
+    {
+        $table = $tableName ?? 'kram_migrations';
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+
+        try {
+            $escapedTable = $connection->escape($table, \Databoss\EscapeMode::COLUMN_OR_TABLE);
+            match ($driver) {
+                'mysql', 'pgsql' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                'sqlite' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                default => null,
+            };
+        } catch (\Throwable) {
+            // Ignore errors - table might not exist
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -197,6 +217,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_status(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY)', 'DROP TABLE users');
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT PRIMARY KEY)', 'DROP TABLE posts');
 
@@ -365,6 +386,7 @@ PHP;
      */
     public function test_status_with_gaps_in_versions(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         // Create three migrations
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT)', 'DROP TABLE users');
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT)', 'DROP TABLE posts');
