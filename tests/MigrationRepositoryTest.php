@@ -130,6 +130,7 @@ class MigrationRepositoryTest extends TestCase
     {
         $customTable = 'custom_migrations';
         $this->cleanupMigrationsTable($connection, $customTable);
+        $this->cleanupMigrationsTable($connection); // Also clean default table
         $repository = new MigrationRepository($connection, $customTable);
         $repository->initialize();
 
@@ -198,6 +199,7 @@ class MigrationRepositoryTest extends TestCase
      */
     public function test_get_version_from_array(ConnectionInterface $connection): void
     {
+        $this->cleanupMigrationsTable($connection);
         $repository = new MigrationRepository($connection);
         $repository->initialize();
 

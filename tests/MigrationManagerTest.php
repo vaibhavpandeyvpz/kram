@@ -48,6 +48,31 @@ class MigrationManagerTest extends TestCase
         }
     }
 
+    /**
+     * Clean up a table if it exists.
+     */
+    private function cleanupTable(ConnectionInterface $connection, string $tableName): void
+    {
+        try {
+            $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
+            $connection->execute("DROP TABLE IF EXISTS {$escapedTable}");
+        } catch (\Throwable) {
+            // Ignore errors
+        }
+    }
+
+    /**
+     * Clean up all test tables and migrations table.
+     */
+    private function cleanupAll(ConnectionInterface $connection): void
+    {
+        $this->cleanupMigrationsTable($connection);
+        $this->cleanupTable($connection, 'users');
+        $this->cleanupTable($connection, 'posts');
+        $this->cleanupTable($connection, 'comments');
+        $this->cleanupTable($connection, 'test');
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -91,6 +116,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_migrate_with_sql_migrations(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         // Create SQL migration files
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255))', 'DROP TABLE users');
 
@@ -115,6 +141,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_migrate_with_php_migrations(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         // Create PHP migration
         $this->createPhpMigration('20240101120000', 'CreateUsers', 'CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255))', 'DROP TABLE users');
 
@@ -134,6 +161,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_migrate_multiple_migrations(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY)', 'DROP TABLE users');
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT PRIMARY KEY)', 'DROP TABLE posts');
 
@@ -151,6 +179,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_migrate_executes_in_order(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT PRIMARY KEY)', 'DROP TABLE posts');
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY)', 'DROP TABLE users');
 
@@ -169,6 +198,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_rollback_last_migration(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY)', 'DROP TABLE users');
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT PRIMARY KEY)', 'DROP TABLE posts');
 
@@ -196,6 +226,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_rollback_to_version(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY)', 'DROP TABLE users');
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT PRIMARY KEY)', 'DROP TABLE posts');
         $this->createSqlMigration('20240101120002', 'create_comments', 'CREATE TABLE comments (id INT PRIMARY KEY)', 'DROP TABLE comments');
@@ -364,6 +395,7 @@ PHP;
      */
     public function test_rollback_with_missing_down_files(ConnectionInterface $connection): void
     {
+        $this->cleanupAll($connection);
         // Create migration with down file
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT)', 'DROP TABLE users');
 

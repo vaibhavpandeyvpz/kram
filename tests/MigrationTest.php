@@ -27,6 +27,19 @@ class MigrationTest extends TestCase
 {
     private string $migrationsDir;
 
+    /**
+     * Clean up a table if it exists.
+     */
+    private function cleanupTable(ConnectionInterface $connection, string $tableName): void
+    {
+        try {
+            $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
+            $connection->execute("DROP TABLE IF EXISTS {$escapedTable}");
+        } catch (\Throwable) {
+            // Ignore errors
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -57,6 +70,7 @@ class MigrationTest extends TestCase
      */
     public function test_sql_migration_up(ConnectionInterface $connection): void
     {
+        $this->cleanupTable($connection, 'users');
         $basePath = "{$this->migrationsDir}/20240101120000_create_users";
         file_put_contents("{$basePath}.up.sql", 'CREATE TABLE users (id INT PRIMARY KEY)');
 
@@ -313,6 +327,7 @@ SQL;
      */
     public function test_migration_with_data_manipulation(ConnectionInterface $connection): void
     {
+        $this->cleanupTable($connection, 'users');
         $sql = <<<'SQL'
 CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));
 INSERT INTO users (id, name) VALUES (1, 'John'), (2, 'Jane');
