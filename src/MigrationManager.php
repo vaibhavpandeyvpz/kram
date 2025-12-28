@@ -200,23 +200,14 @@ class MigrationManager
 
         foreach ($migrations as $migration) {
             try {
-                $success = $this->connection->batch(function (ConnectionInterface $db) use ($migration, $direction, $repository, &$executed, &$rolledBack) {
+                $success = $this->connection->batch(function (ConnectionInterface $db) use ($migration, $direction) {
                     $result = match ($direction) {
                         'up' => $migration->up($db),
                         'down' => $migration->down($db),
                         default => throw new \RuntimeException("Invalid direction: {$direction}"),
                     };
 
-                    if (! $result) {
-                        return false;
-                    }
-
-                    match ($direction) {
-                        'up' => $this->recordUp($repository, $migration, $executed),
-                        'down' => $this->recordDown($repository, $migration, $rolledBack),
-                    };
-
-                    return true;
+                    return $result;
                 });
 
                 if (! $success) {
@@ -224,6 +215,13 @@ class MigrationManager
                     $errors[] = "Failed to {$action} migration: {$migration->version} - {$migration->name}";
                     break;
                 }
+
+                // Record migration execution outside batch transaction
+                // DDL operations (CREATE TABLE, etc.) auto-commit in MySQL, so we record after
+                match ($direction) {
+                    'up' => $this->recordUp($repository, $migration, $executed),
+                    'down' => $this->recordDown($repository, $migration, $rolledBack),
+                };
             } catch (\Throwable $e) {
                 $action = $direction === 'up' ? 'executing' : 'rolling back';
                 $errors[] = "Error {$action} migration {$migration->version} - {$migration->name}: {$e->getMessage()}";

@@ -87,6 +87,7 @@ class MigrationTest extends TestCase
      */
     public function test_sql_migration_down(ConnectionInterface $connection): void
     {
+        $this->cleanupTable($connection, 'users');
         // Create table first
         $connection->execute('CREATE TABLE users (id INT PRIMARY KEY)');
 
@@ -204,6 +205,8 @@ PHP;
      */
     public function test_sql_migration_multiple_statements(ConnectionInterface $connection): void
     {
+        $this->cleanupTable($connection, 'users');
+        $this->cleanupTable($connection, 'posts');
         $sql = <<<'SQL'
 CREATE TABLE users (id INT PRIMARY KEY);
 CREATE TABLE posts (id INT PRIMARY KEY);
@@ -303,6 +306,13 @@ PHP;
      */
     public function test_migration_with_ddl_operations(ConnectionInterface $connection): void
     {
+        $this->cleanupTable($connection, 'users');
+        // Clean up view if it exists
+        try {
+            $connection->execute('DROP VIEW IF EXISTS active_users');
+        } catch (\Throwable) {
+            // Ignore
+        }
         $sql = <<<'SQL'
 CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));
 CREATE VIEW active_users AS SELECT * FROM users WHERE id > 0;
