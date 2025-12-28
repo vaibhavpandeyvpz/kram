@@ -248,7 +248,7 @@ class MigrationManagerTest extends TestCase
      */
     public function test_status(ConnectionInterface $connection): void
     {
-        $this->cleanupMigrationsTable($connection);
+        $this->cleanupAll($connection); // Clean up both migrations table and test tables
         $this->createSqlMigration('20240101120000', 'create_users', 'CREATE TABLE users (id INT PRIMARY KEY)', 'DROP TABLE users');
         $this->createSqlMigration('20240101120001', 'create_posts', 'CREATE TABLE posts (id INT PRIMARY KEY)', 'DROP TABLE posts');
 

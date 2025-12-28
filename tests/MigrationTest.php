@@ -337,7 +337,24 @@ SQL;
      */
     public function test_migration_with_data_manipulation(ConnectionInterface $connection): void
     {
-        $this->cleanupTable($connection, 'users');
+        // Ensure table is dropped (try multiple times for PostgreSQL which may have locks)
+        $maxAttempts = 3;
+        for ($i = 0; $i < $maxAttempts; $i++) {
+            $this->cleanupTable($connection, 'users');
+            // Check if table still exists
+            try {
+                $connection->query('SELECT 1 FROM users LIMIT 1');
+                // Table still exists, wait a bit and try again
+                if ($i < $maxAttempts - 1) {
+                    usleep(50000); // 50ms
+                    continue;
+                }
+            } catch (\PDOException) {
+                // Table doesn't exist, we're good
+                break;
+            }
+        }
+        
         $sql = <<<'SQL'
 CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));
 INSERT INTO users (id, name) VALUES (1, 'John'), (2, 'Jane');
