@@ -244,7 +244,7 @@ The version is used to determine the execution order, so it's important that ver
 
 2. **Deterministic Execution**: Migrations are always executed in version order (ascending for migrate, descending for rollback).
 
-3. **Transaction Safety**: Each migration runs within a database transaction. If a migration fails, all changes are rolled back.
+3. **Migration Execution**: Migrations are executed directly without transaction wrappers. Note that DDL operations (CREATE TABLE, DROP TABLE, etc.) in MySQL auto-commit, so they cannot be rolled back. Each migration should be designed to be idempotent and safe to run.
 
 4. **Version Detection**: Kram automatically detects which migrations have been executed by comparing migration files with the tracking table.
 

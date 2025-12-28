@@ -200,24 +200,22 @@ class MigrationManager
 
         foreach ($migrations as $migration) {
             try {
-                $success = $this->connection->batch(function (ConnectionInterface $db) use ($migration, $direction) {
-                    $result = match ($direction) {
-                        'up' => $migration->up($db),
-                        'down' => $migration->down($db),
-                        default => throw new \RuntimeException("Invalid direction: {$direction}"),
-                    };
+                // Execute migration directly (no batch transaction)
+                // DDL operations (CREATE TABLE, DROP TABLE, etc.) auto-commit in MySQL anyway,
+                // so wrapping in a transaction doesn't provide atomicity benefits and causes issues.
+                $result = match ($direction) {
+                    'up' => $migration->up($this->connection),
+                    'down' => $migration->down($this->connection),
+                    default => throw new \RuntimeException("Invalid direction: {$direction}"),
+                };
 
-                    return $result;
-                });
-
-                if (! $success) {
+                if (! $result) {
                     $action = $direction === 'up' ? 'execute' : 'rollback';
                     $errors[] = "Failed to {$action} migration: {$migration->version} - {$migration->name}";
                     break;
                 }
 
-                // Record migration execution outside batch transaction
-                // DDL operations (CREATE TABLE, etc.) auto-commit in MySQL, so we record after
+                // Record migration execution
                 match ($direction) {
                     'up' => $this->recordUp($repository, $migration, $executed),
                     'down' => $this->recordDown($repository, $migration, $rolledBack),
