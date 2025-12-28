@@ -124,26 +124,27 @@ class MigrationTest extends TestCase
      */
     public function test_php_migration(ConnectionInterface $connection): void
     {
-        $phpCode = <<<'PHP'
+        $className = 'TestMigration_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class TestMigration implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
-        return $connection->execute('CREATE TABLE test (id INT PRIMARY KEY)') !== false;
+        return \$connection->execute('CREATE TABLE test (id INT PRIMARY KEY)') !== false;
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
-        return $connection->execute('DROP TABLE test') !== false;
+        return \$connection->execute('DROP TABLE test') !== false;
     }
 }
 PHP;
-        $filePath = "{$this->migrationsDir}/TestMigration.php";
+        $filePath = "{$this->migrationsDir}/{$className}.php";
         file_put_contents($filePath, $phpCode);
 
         $migration = new Migration('20240101120000', 'Test Migration', $filePath, MigrationType::PHP);
@@ -216,26 +217,27 @@ SQL;
             Connection::OPT_DATABASE => ':memory:',
         ]);
 
-        $phpCode = <<<'PHP'
+        $className = 'FailingMigration_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class FailingMigration implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
         return false; // Explicitly return false
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
         return false;
     }
 }
 PHP;
-        $filePath = "{$this->migrationsDir}/FailingMigration.php";
+        $filePath = "{$this->migrationsDir}/{$className}.php";
         file_put_contents($filePath, $phpCode);
 
         $migration = new Migration('20240101120000', 'Failing Migration', $filePath, MigrationType::PHP);
@@ -252,26 +254,27 @@ PHP;
             Connection::OPT_DATABASE => ':memory:',
         ]);
 
-        $phpCode = <<<'PHP'
+        $className = 'ExceptionMigration_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class ExceptionMigration implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
         throw new \RuntimeException('Migration failed intentionally');
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
         throw new \RuntimeException('Rollback failed intentionally');
     }
 }
 PHP;
-        $filePath = "{$this->migrationsDir}/ExceptionMigration.php";
+        $filePath = "{$this->migrationsDir}/{$className}.php";
         file_put_contents($filePath, $phpCode);
 
         $migration = new Migration('20240101120000', 'Exception Migration', $filePath, MigrationType::PHP);

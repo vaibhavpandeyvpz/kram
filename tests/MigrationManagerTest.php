@@ -410,26 +410,27 @@ PHP;
             Connection::OPT_DATABASE => ':memory:',
         ]);
 
-        $phpCode = <<<'PHP'
+        $className = 'RollbackFailingMigration_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class RollbackFailingMigration implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
-        return $connection->execute('CREATE TABLE test (id INT)') !== false;
+        return \$connection->execute('CREATE TABLE test (id INT)') !== false;
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
         return false; // Rollback fails
     }
 }
 PHP;
-        $filePath = "{$this->migrationsDir}/20240101120000_RollbackFailingMigration.php";
+        $filePath = "{$this->migrationsDir}/20240101120000_{$className}.php";
         file_put_contents($filePath, $phpCode);
 
         $manager = new MigrationManager($connection, $this->migrationsDir);
@@ -447,26 +448,27 @@ PHP;
             Connection::OPT_DATABASE => ':memory:',
         ]);
 
-        $phpCode = <<<'PHP'
+        $className = 'ExceptionThrowingMigration_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class ExceptionThrowingMigration implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
         throw new \RuntimeException('Something went wrong');
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
         return true;
     }
 }
 PHP;
-        $filePath = "{$this->migrationsDir}/20240101120000_ExceptionThrowingMigration.php";
+        $filePath = "{$this->migrationsDir}/20240101120000_{$className}.php";
         file_put_contents($filePath, $phpCode);
 
         $manager = new MigrationManager($connection, $this->migrationsDir);

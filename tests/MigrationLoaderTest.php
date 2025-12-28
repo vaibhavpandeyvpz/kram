@@ -91,33 +91,36 @@ class MigrationLoaderTest extends TestCase
 
     public function test_load_php_migrations(): void
     {
-        $phpCode = <<<'PHP'
+        $className = 'CreateUsers_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class CreateUsers implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
         return true;
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
         return true;
     }
 }
 PHP;
-        file_put_contents("{$this->migrationsDir}/20240101120000_CreateUsers.php", $phpCode);
+        file_put_contents("{$this->migrationsDir}/20240101120000_{$className}.php", $phpCode);
 
         $loader = new MigrationLoader($this->migrationsDir);
         $migrations = $loader->load();
 
         $this->assertCount(1, $migrations);
         $this->assertEquals('20240101120000', $migrations[0]->version);
-        $this->assertEquals('CreateUsers', $migrations[0]->name);
+        // Name is normalized (underscores to spaces, capitalized)
+        // The name will be like "CreateUsers {uniqid}" after normalization
+        $this->assertStringStartsWith('CreateUsers', $migrations[0]->name);
         $this->assertEquals(MigrationType::PHP, $migrations[0]->type);
     }
 
@@ -153,26 +156,27 @@ PHP;
         file_put_contents("{$this->migrationsDir}/20240101120000_create_users.up.sql", 'CREATE TABLE users');
         file_put_contents("{$this->migrationsDir}/20240101120000_create_users.down.sql", 'DROP TABLE users');
 
-        $phpCode = <<<'PHP'
+        $className = 'CreateUsers_'.uniqid();
+        $phpCode = <<<PHP
 <?php
 
 use Databoss\ConnectionInterface;
 use Kram\MigrationInterface;
 
-class CreateUsers implements MigrationInterface
+class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface \$connection): bool
     {
         return true;
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface \$connection): bool
     {
         return true;
     }
 }
 PHP;
-        file_put_contents("{$this->migrationsDir}/20240101120000_CreateUsers.php", $phpCode);
+        file_put_contents("{$this->migrationsDir}/20240101120000_{$className}.php", $phpCode);
 
         $loader = new MigrationLoader($this->migrationsDir);
         $migrations = $loader->load();
