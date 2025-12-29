@@ -322,14 +322,14 @@ use Kram\MigrationInterface;
 
 class {$uniqueClassName} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
-        return \$connection->execute("{$upSql}") !== false;
+        \$connection->execute("{$upSql}");
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return \$connection->execute("{$downSql}") !== false;
+        \$connection->execute("{$downSql}");
     }
 }
 PHP;
@@ -486,14 +486,14 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
-        return \$connection->execute('CREATE TABLE test (id INT)') !== false;
+        \$connection->execute('CREATE TABLE test (id INT)');
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return false; // Rollback fails
+        throw new \RuntimeException('Rollback fails');
     }
 }
 PHP;
@@ -505,7 +505,7 @@ PHP;
 
         $result = $manager->rollback();
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('Failed to rollback', $result->message);
+        $this->assertStringContainsString('Error rolling back', $result->message);
     }
 
     public function test_migration_manager_handles_exception(): void
@@ -524,14 +524,14 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
         throw new \RuntimeException('Something went wrong');
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return true;
+        // Rollback succeeds
     }
 }
 PHP;

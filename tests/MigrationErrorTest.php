@@ -70,7 +70,7 @@ class MigrationErrorTest extends TestCase
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         // Empty SQL should succeed (no statements to execute)
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
     }
 
     public function test_sql_migration_execution_failure(): void
@@ -149,7 +149,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify both tables were created
         $usersCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
@@ -173,7 +173,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify table and data
         $result = $connection->query('SELECT name FROM users');
@@ -194,7 +194,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
     }
 
     public function test_sql_migration_with_mixed_quotes(): void
@@ -211,7 +211,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
     }
 
     public function test_sql_migration_with_nested_block_comments(): void
@@ -232,7 +232,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
     }
 
     public function test_migration_manager_migration_failure(): void
@@ -375,7 +375,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
     }
 
     public function test_sql_migration_with_only_comments(): void
@@ -394,7 +394,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
     }
 
     public function test_sql_migration_path_with_extension(): void
@@ -410,8 +410,8 @@ SQL;
         file_put_contents("{$this->migrationsDir}/20240101120000_test.down.sql", 'DROP TABLE test');
 
         $migration = new Migration('20240101120000', 'Test', $filePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
-        $this->assertTrue($migration->down($connection));
+        $migration->up($connection); // Should not throw
+        $migration->down($connection); // Should not throw
     }
 
     /**

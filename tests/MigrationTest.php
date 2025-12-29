@@ -83,7 +83,7 @@ class MigrationTest extends TestCase
         file_put_contents("{$basePath}.up.sql", 'CREATE TABLE users (id INT PRIMARY KEY)');
 
         $migration = new Migration('20240101120000', 'Create Users', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify table was created
         $tableCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
@@ -103,7 +103,7 @@ class MigrationTest extends TestCase
         file_put_contents("{$basePath}.down.sql", 'DROP TABLE users');
 
         $migration = new Migration('20240101120000', 'Create Users', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->down($connection));
+        $migration->down($connection); // Should not throw
 
         // Verify table was dropped - query should fail
         try {
@@ -125,7 +125,7 @@ class MigrationTest extends TestCase
 
         $migration = new Migration('20240101120000', 'Create Users', $basePath, MigrationType::SQL);
         // Should return true even without down file
-        $this->assertTrue($migration->down($connection));
+        $migration->down($connection); // Should not throw
     }
 
     public function test_sql_migration_up_missing_file(): void
@@ -156,14 +156,14 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
-        return \$connection->execute('CREATE TABLE test (id INT PRIMARY KEY)') !== false;
+        \$connection->execute('CREATE TABLE test (id INT PRIMARY KEY)');
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return \$connection->execute('DROP TABLE test') !== false;
+        \$connection->execute('DROP TABLE test');
     }
 }
 PHP;
@@ -171,13 +171,13 @@ PHP;
         file_put_contents($filePath, $phpCode);
 
         $migration = new Migration('20240101120000', 'Test Migration', $filePath, MigrationType::PHP);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify table was created
         $tableCheck = $connection->query('SELECT 1 FROM test LIMIT 1');
         $this->assertNotFalse($tableCheck);
 
-        $this->assertTrue($migration->down($connection));
+        $migration->down($connection); // Should not throw
 
         // Verify table was dropped - query should fail
         try {
@@ -223,7 +223,7 @@ SQL;
         file_put_contents("{$basePath}.up.sql", $sql);
 
         $migration = new Migration('20240101120000', 'Create Tables', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify both tables were created
         $usersCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
@@ -251,14 +251,14 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
-        return false; // Explicitly return false
+        throw new \RuntimeException('Migration failed intentionally');
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return false;
+        throw new \RuntimeException('Rollback failed intentionally');
     }
 }
 PHP;
@@ -266,7 +266,8 @@ PHP;
         file_put_contents($filePath, $phpCode);
 
         $migration = new Migration('20240101120000', 'Failing Migration', $filePath, MigrationType::PHP);
-        $this->assertFalse($migration->up($connection));
+        $this->expectException(\RuntimeException::class);
+        $migration->up($connection);
     }
 
     /**
@@ -288,12 +289,12 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
         throw new \RuntimeException('Migration failed intentionally');
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
         throw new \RuntimeException('Rollback failed intentionally');
     }
@@ -330,7 +331,7 @@ SQL;
         file_put_contents("{$basePath}.down.sql", 'DROP VIEW IF EXISTS active_users; DROP TABLE users;');
 
         $migration = new Migration('20240101120000', 'Create Users View', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify view was created (SQLite specific check)
         if ($connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'sqlite') {
@@ -360,7 +361,7 @@ SQL;
         file_put_contents("{$basePath}.down.sql", "DROP TABLE {$tableName};");
 
         $migration = new Migration('20240101120000', 'Create Users With Data', $basePath, MigrationType::SQL);
-        $this->assertTrue($migration->up($connection));
+        $migration->up($connection); // Should not throw
 
         // Verify data was inserted
         $users = $connection->query("SELECT * FROM {$tableName}");

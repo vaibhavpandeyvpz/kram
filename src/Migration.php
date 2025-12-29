@@ -45,13 +45,12 @@ readonly class Migration
      * Execute the migration up (forward) operation.
      *
      * @param  ConnectionInterface  $connection  Database connection
-     * @return bool True on success, false on failure
      *
-     * @throws \RuntimeException If migration execution fails
+     * @throws \Throwable If migration execution fails
      */
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface $connection): void
     {
-        return match ($this->type) {
+        match ($this->type) {
             MigrationType::SQL => $this->executeSqlMigration($connection, 'up'),
             MigrationType::PHP => $this->executePhpMigration($connection, 'up'),
         };
@@ -61,13 +60,12 @@ readonly class Migration
      * Execute the migration down (rollback) operation.
      *
      * @param  ConnectionInterface  $connection  Database connection
-     * @return bool True on success, false on failure
      *
-     * @throws \RuntimeException If migration execution fails
+     * @throws \Throwable If migration execution fails
      */
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface $connection): void
     {
-        return match ($this->type) {
+        match ($this->type) {
             MigrationType::SQL => $this->executeSqlMigration($connection, 'down'),
             MigrationType::PHP => $this->executePhpMigration($connection, 'down'),
         };
@@ -78,18 +76,19 @@ readonly class Migration
      *
      * @param  ConnectionInterface  $connection  Database connection
      * @param  string  $direction  Migration direction ('up' or 'down')
-     * @return bool True on success, false on failure
      *
-     * @throws \RuntimeException If SQL file is not found or invalid
+     * @throws \RuntimeException If SQL file is not found or invalid, or if execution fails
      */
-    private function executeSqlMigration(ConnectionInterface $connection, string $direction): bool
+    private function executeSqlMigration(ConnectionInterface $connection, string $direction): void
     {
         $file = $this->getSqlFile($direction);
         if (! file_exists($file)) {
-            return match ($direction) {
-                'down' => true, // Down migrations are optional
+            match ($direction) {
+                'down' => null, // Down migrations are optional, just return
                 default => throw new \RuntimeException("SQL migration file not found: {$file}"),
             };
+
+            return;
         }
 
         $sql = file_get_contents($file);
@@ -105,11 +104,11 @@ readonly class Migration
             }
 
             if ($connection->execute($statement) === false) {
-                return false;
+                $errorInfo = $connection->pdo()->errorInfo();
+                $errorMessage = $errorInfo[2] ?? 'Unknown error';
+                throw new \RuntimeException("SQL execution failed: {$errorMessage}");
             }
         }
-
-        return true;
     }
 
     /**
@@ -117,11 +116,11 @@ readonly class Migration
      *
      * @param  ConnectionInterface  $connection  Database connection
      * @param  string  $direction  Migration direction ('up' or 'down')
-     * @return bool True on success, false on failure
      *
      * @throws \RuntimeException If PHP class is not found or invalid
+     * @throws \Throwable If migration execution fails
      */
-    private function executePhpMigration(ConnectionInterface $connection, string $direction): bool
+    private function executePhpMigration(ConnectionInterface $connection, string $direction): void
     {
         $className = file_exists($this->path) ? $this->loadPhpClass($this->path) : $this->path;
 
@@ -135,7 +134,7 @@ readonly class Migration
             throw new \RuntimeException("Migration class must implement MigrationInterface: {$className}");
         }
 
-        return match ($direction) {
+        match ($direction) {
             'up' => $migration->up($connection),
             'down' => $migration->down($connection),
             default => throw new \RuntimeException("Invalid migration direction: {$direction}"),

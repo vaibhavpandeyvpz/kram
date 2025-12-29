@@ -32,7 +32,7 @@
 - **Simple and Deterministic**: Migrations are executed in a predictable order based on version numbers
 - **Multi-database Support**: Works with MySQL/MariaDB, PostgreSQL, and SQLite (via databoss)
 - **Flexible Migration Types**: Supports both SQL file-based and PHP class-based migrations
-- **Transaction Safety**: Migrations run within database transactions for safe rollbacks
+- **Exception-based Error Handling**: Clean exception-based error handling for migration failures
 - **Version Tracking**: Automatically tracks executed migrations in a database table
 - **Rollback Support**: Easily rollback migrations to a specific version or rollback the last N migrations
 - **Type-safe**: Full PHP 8.2+ type declarations throughout
@@ -144,21 +144,21 @@ use Kram\MigrationInterface;
 
 class CreateUsers implements MigrationInterface
 {
-    public function up(ConnectionInterface $connection): bool
+    public function up(ConnectionInterface $connection): void
     {
-        return $connection->execute("
+        $connection->execute("
             CREATE TABLE users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) NOT NULL UNIQUE,
                 created_at DATETIME NOT NULL
             )
-        ") !== false;
+        ");
     }
 
-    public function down(ConnectionInterface $connection): bool
+    public function down(ConnectionInterface $connection): void
     {
-        return $connection->execute("DROP TABLE users") !== false;
+        $connection->execute("DROP TABLE users");
     }
 }
 ```
@@ -279,7 +279,7 @@ All migration operations return a `MigrationResult` object that indicates:
 - `executed`: Array of executed migration versions
 - `rolledBack`: Array of rolled back migration versions
 
-If a migration fails, execution stops immediately and the transaction is rolled back. Any migrations that were successfully executed before the failure will remain in the tracking table, but their database changes will be rolled back due to the transaction.
+If a migration fails, execution stops immediately. Any migrations that were successfully executed before the failure will remain in the tracking table. Note that DDL operations (CREATE TABLE, DROP TABLE, etc.) in MySQL auto-commit and cannot be rolled back, so each migration should be designed to be idempotent and safe to run.
 
 **Example error handling:**
 
@@ -349,11 +349,11 @@ Migration names can contain hyphens, underscores, and other characters. They wil
 
 4. **Keep Migrations Small**: Each migration should represent a single, logical change to the database schema.
 
-5. **Use Transactions**: Kram automatically uses transactions for each migration. If a migration fails, all changes are rolled back.
+5. **Handle Exceptions**: PHP migrations should throw exceptions to indicate failure. Exceptions are caught and handled gracefully by the migration manager.
 
-6. **Handle Exceptions**: PHP migrations can throw exceptions or return `false` to indicate failure. Both are handled gracefully.
+6. **Multiple Statements**: SQL migrations can contain multiple statements. Kram automatically splits them correctly, handling comments and string literals.
 
-7. **Multiple Statements**: SQL migrations can contain multiple statements. Kram automatically splits them correctly, handling comments and string literals.
+7. **Multiple Operations**: PHP migrations can perform multiple database operations without needing to return values. Simply execute operations and throw exceptions on failure.
 
 ## Testing
 
@@ -434,7 +434,7 @@ Enum representing migration types.
 
 ### Migration Fails Mid-Sequence
 
-If a migration fails, execution stops immediately. The transaction is rolled back, but the migration tracking table may show some migrations as executed. This is expected behavior - you can manually remove failed migrations from the tracking table if needed.
+If a migration fails, execution stops immediately. The migration tracking table may show some migrations as executed before the failure. This is expected behavior - you can manually remove failed migrations from the tracking table if needed. Note that DDL operations in MySQL auto-commit and cannot be rolled back.
 
 ### PHP Migration Class Not Found
 

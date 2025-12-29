@@ -100,14 +100,14 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
-        return true;
+        // Migration succeeds
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return true;
+        // Rollback succeeds
     }
 }
 PHP;
@@ -165,14 +165,14 @@ use Kram\MigrationInterface;
 
 class {$className} implements MigrationInterface
 {
-    public function up(ConnectionInterface \$connection): bool
+    public function up(ConnectionInterface \$connection): void
     {
-        return true;
+        // Migration succeeds
     }
 
-    public function down(ConnectionInterface \$connection): bool
+    public function down(ConnectionInterface \$connection): void
     {
-        return true;
+        // Rollback succeeds
     }
 }
 PHP;

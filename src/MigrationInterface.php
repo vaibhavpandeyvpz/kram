@@ -27,15 +27,17 @@ interface MigrationInterface
      * Execute the migration up (forward) operation.
      *
      * @param  ConnectionInterface  $connection  Database connection
-     * @return bool True on success, false on failure
+     *
+     * @throws \Throwable If migration execution fails
      */
-    public function up(ConnectionInterface $connection): bool;
+    public function up(ConnectionInterface $connection): void;
 
     /**
      * Execute the migration down (rollback) operation.
      *
      * @param  ConnectionInterface  $connection  Database connection
-     * @return bool True on success, false on failure
+     *
+     * @throws \Throwable If migration execution fails
      */
-    public function down(ConnectionInterface $connection): bool;
+    public function down(ConnectionInterface $connection): void;
 }

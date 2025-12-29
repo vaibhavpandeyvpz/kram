@@ -203,17 +203,11 @@ class MigrationManager
                 // Execute migration directly (no batch transaction)
                 // DDL operations (CREATE TABLE, DROP TABLE, etc.) auto-commit in MySQL anyway,
                 // so wrapping in a transaction doesn't provide atomicity benefits and causes issues.
-                $result = match ($direction) {
+                match ($direction) {
                     'up' => $migration->up($this->connection),
                     'down' => $migration->down($this->connection),
                     default => throw new \RuntimeException("Invalid direction: {$direction}"),
                 };
-
-                if (! $result) {
-                    $action = $direction === 'up' ? 'execute' : 'rollback';
-                    $errors[] = "Failed to {$action} migration: {$migration->version} - {$migration->name}";
-                    break;
-                }
 
                 // Record migration execution
                 match ($direction) {
