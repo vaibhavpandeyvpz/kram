@@ -32,9 +32,21 @@ class MigrationTest extends TestCase
      */
     private function cleanupTable(ConnectionInterface $connection, string $tableName): void
     {
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
+
+        // For PostgreSQL, use CASCADE to drop dependent objects
+        $dropSql = match ($driver) {
+            'pgsql' => "DROP TABLE IF EXISTS {$escapedTable} CASCADE",
+            default => "DROP TABLE IF EXISTS {$escapedTable}",
+        };
+
         try {
-            $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
-            $connection->execute("DROP TABLE IF EXISTS {$escapedTable}");
+            $connection->execute($dropSql);
+            // For PostgreSQL, wait a bit to ensure the drop is committed
+            if ($driver === 'pgsql') {
+                usleep(100000); // 100ms
+            }
         } catch (\Throwable) {
             // Ignore errors
         }
@@ -337,39 +349,33 @@ SQL;
      */
     public function test_migration_with_data_manipulation(ConnectionInterface $connection): void
     {
-        // Ensure table is dropped (try multiple times for PostgreSQL which may have locks)
-        $maxAttempts = 3;
-        for ($i = 0; $i < $maxAttempts; $i++) {
-            $this->cleanupTable($connection, 'users');
-            // Check if table still exists
-            try {
-                $connection->query('SELECT 1 FROM users LIMIT 1');
-                // Table still exists, wait a bit and try again
-                if ($i < $maxAttempts - 1) {
-                    usleep(50000); // 50ms
-                    continue;
-                }
-            } catch (\PDOException) {
-                // Table doesn't exist, we're good
-                break;
-            }
-        }
-        
-        $sql = <<<'SQL'
-CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));
-INSERT INTO users (id, name) VALUES (1, 'John'), (2, 'Jane');
+        // Use a unique table name to avoid conflicts with other tests
+        $tableName = 'test_users_'.uniqid();
+
+        // Ensure table is dropped if it exists
+        $this->cleanupTable($connection, $tableName);
+
+        // Wait a bit to ensure cleanup is complete (especially for PostgreSQL)
+        usleep(50000); // 50ms
+
+        $sql = <<<SQL
+CREATE TABLE {$tableName} (id INT PRIMARY KEY, name VARCHAR(255));
+INSERT INTO {$tableName} (id, name) VALUES (1, 'John'), (2, 'Jane');
 SQL;
         $basePath = "{$this->migrationsDir}/20240101120000_create_users_with_data";
         file_put_contents("{$basePath}.up.sql", $sql);
-        file_put_contents("{$basePath}.down.sql", 'DROP TABLE users;');
+        file_put_contents("{$basePath}.down.sql", "DROP TABLE {$tableName};");
 
         $migration = new Migration('20240101120000', 'Create Users With Data', $basePath, MigrationType::SQL);
         $this->assertTrue($migration->up($connection));
 
         // Verify data was inserted
-        $users = $connection->query('SELECT * FROM users');
+        $users = $connection->query("SELECT * FROM {$tableName}");
         $this->assertNotFalse($users);
         $this->assertCount(2, $users);
+
+        // Clean up
+        $this->cleanupTable($connection, $tableName);
     }
 
     /**
