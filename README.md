@@ -41,7 +41,7 @@
 ## Requirements
 
 - PHP >= 8.2
-- [vaibhavpandeyvpz/databoss](https://github.com/vaibhavpandeyvpz/databoss) (automatically installed as dependency)
+- [vaibhavpandeyvpz/databoss](https://github.com/vaibhavpandeyvpz/databoss) ^2.1 (automatically installed as dependency)
 
 ## Installation
 
@@ -163,10 +163,94 @@ class CreateUsers implements MigrationInterface
 }
 ```
 
+**Using DDL Methods (Recommended):**
+
+With databoss 2.1+, you can use database-agnostic DDL methods instead of raw SQL:
+
+```php
+<?php
+
+use Databoss\ConnectionInterface;
+use Kram\MigrationInterface;
+
+class CreateUsers implements MigrationInterface
+{
+    public function up(ConnectionInterface $connection): void
+    {
+        // Create table using databoss DDL methods
+        // Column types are automatically translated for each database
+        $connection->create('users', [
+            'id' => [
+                'type' => 'INTEGER',
+                'auto_increment' => true,
+                'primary' => true,
+            ],
+            'name' => [
+                'type' => 'VARCHAR(255)',
+                'null' => false,
+            ],
+            'email' => [
+                'type' => 'VARCHAR(255)',
+                'null' => false,
+            ],
+            'created_at' => [
+                'type' => 'DATETIME',
+                'null' => false,
+            ],
+        ]);
+
+        // Create a unique index
+        $connection->unique('users', ['email'], 'unique_email');
+    }
+
+    public function down(ConnectionInterface $connection): void
+    {
+        // Drop the table
+        $connection->drop('users');
+    }
+}
+```
+
+**Advanced DDL Operations:**
+
+```php
+public function up(ConnectionInterface $connection): void
+{
+    // Create table with composite primary key
+    $connection->create('order_items', [
+        'order_id' => ['type' => 'INTEGER', 'null' => false],
+        'product_id' => ['type' => 'INTEGER', 'null' => false],
+        'quantity' => ['type' => 'INTEGER', 'null' => false],
+    ], ['order_id', 'product_id']);
+
+    // Create indexes
+    $connection->index('order_items', ['order_id']);
+    $connection->index('order_items', ['product_id'], 'idx_product');
+
+    // Create foreign key
+    $connection->foreign('order_items', 'order_id', ['orders', 'id'], 'fk_order_items_order');
+    $connection->foreign('order_items', 'product_id', ['products', 'id'], 'fk_order_items_product');
+}
+
+public function down(ConnectionInterface $connection): void
+{
+    // Drop foreign keys (drop table automatically removes them)
+    $connection->drop('order_items');
+}
+```
+
+**Benefits of DDL Methods:**
+
+- **Database-agnostic**: Column types are automatically translated (e.g., `BOOLEAN` → `TINYINT(1)` for MySQL, `BOOLEAN` for PostgreSQL)
+- **Cleaner syntax**: No need to write database-specific SQL
+- **Type safety**: Better IDE support and fewer syntax errors
+- **Consistent**: Same API works across MySQL, PostgreSQL, SQLite, and SQL Server
+
 **Note:**
 
 - For PHP migrations, the class name should match the filename (without extension), and it must implement `MigrationInterface`.
 - If both SQL and PHP migrations exist for the same version, PHP migrations take precedence.
+- You can mix raw SQL (`execute()`) and DDL methods in the same migration as needed.
 
 ## Usage
 
@@ -332,6 +416,60 @@ $migration->up($connection);
 $migration->down($connection);
 ```
 
+### Using DDL Methods in PHP Migrations
+
+With databoss 2.1+, PHP migrations can use database-agnostic DDL methods. This is especially useful when you need to support multiple database types:
+
+**Available DDL Methods:**
+
+- `create(?string $table = null, ?array $columns = null, ?array $primaryKey = null): bool` - Create database or table
+- `drop(?string $table = null, ?string $column = null): bool` - Drop database, table, or column
+- `modify(string $table, string $column, array $definition): bool` - Modify a column (MySQL, PostgreSQL, SQL Server only)
+- `index(string $table, string|array $columns, ?string $indexName = null): bool` - Create an index
+- `unique(string $table, string|array $columns, ?string $indexName = null): bool` - Create a unique index
+- `foreign(string $table, string $column, array $references, ?string $constraintName = null): bool` - Create a foreign key
+- `unindex(string $table, string|array $identifier): bool` - Drop an index
+
+**Example:**
+
+```php
+public function up(ConnectionInterface $connection): void
+{
+    // Create table - column types are automatically translated
+    $connection->create('products', [
+        'id' => ['type' => 'INTEGER', 'auto_increment' => true, 'primary' => true],
+        'name' => ['type' => 'VARCHAR(255)', 'null' => false],
+        'price' => ['type' => 'DECIMAL(10,2)', 'null' => false],
+        'active' => ['type' => 'BOOLEAN', 'null' => false], // Auto-translated per database
+        'description' => ['type' => 'TEXT', 'null' => true],
+    ]);
+
+    // Create indexes
+    $connection->index('products', ['name']);
+    $connection->unique('products', ['name'], 'unique_product_name');
+
+    // Modify column (MySQL, PostgreSQL, SQL Server only)
+    // $connection->modify('products', 'name', ['type' => 'VARCHAR(500)']);
+}
+
+public function down(ConnectionInterface $connection): void
+{
+    $connection->drop('products');
+}
+```
+
+**Column Type Translation:**
+
+databoss automatically translates common types to database-specific equivalents:
+
+- `BOOLEAN` → `TINYINT(1)` (MySQL), `BOOLEAN` (PostgreSQL), `INTEGER` (SQLite), `BIT` (SQL Server)
+- `SERIAL`/`BIGSERIAL` → `INT AUTO_INCREMENT` (MySQL), `SERIAL`/`BIGSERIAL` (PostgreSQL), `INTEGER` (SQLite), `INT IDENTITY(1,1)` (SQL Server)
+- `DATETIME` → `DATETIME` (MySQL), `TIMESTAMP` (PostgreSQL), `TEXT` (SQLite), `DATETIME2` (SQL Server)
+- `JSON` → `JSON` (MySQL/PostgreSQL), `TEXT` (SQLite), `NVARCHAR(MAX)` (SQL Server)
+- And many more...
+
+See the [databoss documentation](https://github.com/vaibhavpandeyvpz/databoss) for the complete list of supported types and translations.
+
 ### Special Characters in Migration Names
 
 Migration names can contain hyphens, underscores, and other characters. They will be normalized for display:
@@ -345,15 +483,17 @@ Migration names can contain hyphens, underscores, and other characters. They wil
 
 2. **Always Provide Down Migrations**: For SQL migrations, down migrations (`.down.sql` files) are optional but recommended. For PHP migrations, always implement the `down()` method.
 
-3. **Test Migrations**: Test both up and down migrations before deploying to production.
+3. **Use DDL Methods for Multi-Database Support**: When writing PHP migrations that need to work across multiple database types, use databoss DDL methods (`create()`, `drop()`, `index()`, etc.) instead of raw SQL. These methods automatically handle database-specific differences.
 
-4. **Keep Migrations Small**: Each migration should represent a single, logical change to the database schema.
+4. **Test Migrations**: Test both up and down migrations before deploying to production.
 
-5. **Handle Exceptions**: PHP migrations should throw exceptions to indicate failure. Exceptions are caught and handled gracefully by the migration manager.
+5. **Keep Migrations Small**: Each migration should represent a single, logical change to the database schema.
 
-6. **Multiple Statements**: SQL migrations can contain multiple statements. Kram automatically splits them correctly, handling comments and string literals.
+6. **Handle Exceptions**: PHP migrations should throw exceptions to indicate failure. Exceptions are caught and handled gracefully by the migration manager.
 
-7. **Multiple Operations**: PHP migrations can perform multiple database operations without needing to return values. Simply execute operations and throw exceptions on failure.
+7. **Multiple Statements**: SQL migrations can contain multiple statements. Kram automatically splits them correctly, handling comments and string literals.
+
+8. **Multiple Operations**: PHP migrations can perform multiple database operations without needing to return values. Simply execute operations and throw exceptions on failure.
 
 ## Testing
 
