@@ -36,8 +36,8 @@ class MigrationRepositoryTest extends TestCase
         try {
             $escapedTable = $connection->escape($table, \Databoss\EscapeMode::COLUMN_OR_TABLE);
             match ($driver) {
-                'mysql', 'pgsql' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
-                'sqlite' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                'mysql', 'pgsql', 'sqlite' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                'sqlsrv' => $connection->execute("IF OBJECT_ID('{$escapedTable}', 'U') IS NOT NULL DROP TABLE {$escapedTable}"),
                 default => null,
             };
         } catch (\Throwable) {
@@ -180,6 +180,42 @@ class MigrationRepositoryTest extends TestCase
             $connections[] = [$postgres];
         } catch (\Throwable) {
             // PostgreSQL not available, skip
+        }
+
+        // SQL Server (skip if not available)
+        try {
+            // First connect to master to create testdb if it doesn't exist
+            $masterConnection = new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'master',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
+            ]);
+            $masterConnection->pdo(); // Test connection
+            // Create testdb if it doesn't exist
+            try {
+                $masterConnection->execute("IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'testdb') CREATE DATABASE testdb");
+            } catch (\Throwable) {
+                // Database might already exist, ignore
+            }
+
+            // Now connect to testdb
+            $sqlserver = new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'testdb',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
+            ]);
+            $sqlserver->pdo(); // Test connection
+            $connections[] = [$sqlserver];
+        } catch (\Throwable) {
+            // SQL Server not available, skip
         }
 
         // SQLite (always available)

@@ -5,7 +5,7 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/vaibhavpandeyvpz/kram/tests.yml?branch=main&style=flat-square)](https://github.com/vaibhavpandeyvpz/kram/actions)
 [![License](https://img.shields.io/packagist/l/vaibhavpandeyvpz/kram.svg?style=flat-square)](LICENSE)
 
-**Kram** (क्रम) is a simple and deterministic database migration and versioning library built on top of [databoss](https://github.com/vaibhavpandeyvpz/databoss). It provides a clean, straightforward API for managing database schema changes across MySQL/MariaDB, PostgreSQL, and SQLite databases.
+**Kram** (क्रम) is a simple and deterministic database migration and versioning library built on top of [databoss](https://github.com/vaibhavpandeyvpz/databoss). It provides a clean, straightforward API for managing database schema changes across MySQL/MariaDB, PostgreSQL, SQLite, and Microsoft SQL Server databases.
 
 ## Table of Contents
 
@@ -30,7 +30,7 @@
 ## Features
 
 - **Simple and Deterministic**: Migrations are executed in a predictable order based on version numbers
-- **Multi-database Support**: Works with MySQL/MariaDB, PostgreSQL, and SQLite (via databoss)
+- **Multi-database Support**: Works with MySQL/MariaDB, PostgreSQL, SQLite, and Microsoft SQL Server (via databoss)
 - **Flexible Migration Types**: Supports both SQL file-based and PHP class-based migrations
 - **Exception-based Error Handling**: Clean exception-based error handling for migration failures
 - **Version Tracking**: Automatically tracks executed migrations in a database table
@@ -351,6 +351,7 @@ Kram works with all databases supported by databoss:
 - **MySQL/MariaDB**: Full support
 - **PostgreSQL**: Full support
 - **SQLite**: Full support
+- **Microsoft SQL Server**: Full support
 
 The migrations tracking table is automatically created with the appropriate SQL syntax for each database driver.
 
@@ -497,12 +498,12 @@ Migration names can contain hyphens, underscores, and other characters. They wil
 
 ## Testing
 
-The project includes comprehensive unit tests using PHPUnit 10 with **90%+ code coverage**. Tests run against MySQL, PostgreSQL, and SQLite to ensure compatibility across all supported databases.
+The project includes comprehensive unit tests using PHPUnit 10 with **90%+ code coverage**. Tests run against MySQL, PostgreSQL, SQLite, and SQL Server to ensure compatibility across all supported databases.
 
 ### Running Tests
 
 ```bash
-# Start database containers (MySQL and PostgreSQL)
+# Start database containers (MySQL, PostgreSQL, and SQL Server)
 docker compose up -d
 
 # Wait for databases to be ready, then run tests

@@ -28,6 +28,32 @@ class MigrationTest extends TestCase
     private string $migrationsDir;
 
     /**
+     * Check if a table exists.
+     */
+    private function tableExists(ConnectionInterface $connection, string $tableName): bool
+    {
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+        $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
+
+        $sql = match ($driver) {
+            'mysql' => 'SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?',
+            'pgsql' => "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?",
+            'sqlite' => "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?",
+            'sqlsrv' => "SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = ?",
+            default => throw new \RuntimeException("Unsupported database driver: {$driver}"),
+        };
+
+        $result = $connection->query($sql, [$tableName]);
+        if ($result === false || empty($result)) {
+            return false;
+        }
+
+        $count = is_object($result[0]) ? $result[0]->count : $result[0]['count'];
+
+        return (int) $count > 0;
+    }
+
+    /**
      * Clean up a table if it exists.
      */
     private function cleanupTable(ConnectionInterface $connection, string $tableName): void
@@ -36,8 +62,10 @@ class MigrationTest extends TestCase
         $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
 
         // For PostgreSQL, use CASCADE to drop dependent objects
+        // For SQL Server, use IF OBJECT_ID check
         $dropSql = match ($driver) {
             'pgsql' => "DROP TABLE IF EXISTS {$escapedTable} CASCADE",
+            'sqlsrv' => "IF OBJECT_ID('{$escapedTable}', 'U') IS NOT NULL DROP TABLE {$escapedTable}",
             default => "DROP TABLE IF EXISTS {$escapedTable}",
         };
 
@@ -86,8 +114,7 @@ class MigrationTest extends TestCase
         $migration->up($connection); // Should not throw
 
         // Verify table was created
-        $tableCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
-        $this->assertNotFalse($tableCheck);
+        $this->assertTrue($this->tableExists($connection, 'users'));
     }
 
     /**
@@ -105,14 +132,8 @@ class MigrationTest extends TestCase
         $migration = new Migration('20240101120000', 'Create Users', $basePath, MigrationType::SQL);
         $migration->down($connection); // Should not throw
 
-        // Verify table was dropped - query should fail
-        try {
-            $connection->query('SELECT 1 FROM users LIMIT 1');
-            $this->fail('Table should not exist');
-        } catch (\PDOException) {
-            // Expected - table doesn't exist
-            $this->assertTrue(true);
-        }
+        // Verify table was dropped
+        $this->assertFalse($this->tableExists($connection, 'users'));
     }
 
     /**
@@ -126,6 +147,7 @@ class MigrationTest extends TestCase
         $migration = new Migration('20240101120000', 'Create Users', $basePath, MigrationType::SQL);
         // Should return true even without down file
         $migration->down($connection); // Should not throw
+        $this->assertTrue(true); // Verify no exception was thrown
     }
 
     public function test_sql_migration_up_missing_file(): void
@@ -174,19 +196,12 @@ PHP;
         $migration->up($connection); // Should not throw
 
         // Verify table was created
-        $tableCheck = $connection->query('SELECT 1 FROM test LIMIT 1');
-        $this->assertNotFalse($tableCheck);
+        $this->assertTrue($this->tableExists($connection, 'test'));
 
         $migration->down($connection); // Should not throw
 
-        // Verify table was dropped - query should fail
-        try {
-            $connection->query('SELECT 1 FROM test LIMIT 1');
-            $this->fail('Table should not exist');
-        } catch (\PDOException) {
-            // Expected - table doesn't exist
-            $this->assertTrue(true);
-        }
+        // Verify table was dropped
+        $this->assertFalse($this->tableExists($connection, 'test'));
     }
 
     public function test_php_migration_invalid_class(): void
@@ -226,10 +241,8 @@ SQL;
         $migration->up($connection); // Should not throw
 
         // Verify both tables were created
-        $usersCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
-        $postsCheck = $connection->query('SELECT 1 FROM posts LIMIT 1');
-        $this->assertNotFalse($usersCheck);
-        $this->assertNotFalse($postsCheck);
+        $this->assertTrue($this->tableExists($connection, 'users'));
+        $this->assertTrue($this->tableExists($connection, 'posts'));
     }
 
     /**
@@ -333,6 +346,9 @@ SQL;
         $migration = new Migration('20240101120000', 'Create Users View', $basePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
 
+        // Verify table was created
+        $this->assertTrue($this->tableExists($connection, 'users'));
+
         // Verify view was created (SQLite specific check)
         if ($connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'sqlite') {
             $result = $connection->query("SELECT name FROM sqlite_master WHERE type='view' AND name='active_users'");
@@ -407,6 +423,42 @@ SQL;
             $connections[] = [$postgres];
         } catch (\Throwable) {
             // PostgreSQL not available, skip
+        }
+
+        // SQL Server (skip if not available)
+        try {
+            // First connect to master to create testdb if it doesn't exist
+            $masterConnection = new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'master',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
+            ]);
+            $masterConnection->pdo(); // Test connection
+            // Create testdb if it doesn't exist
+            try {
+                $masterConnection->execute("IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'testdb') CREATE DATABASE testdb");
+            } catch (\Throwable) {
+                // Database might already exist, ignore
+            }
+
+            // Now connect to testdb
+            $sqlserver = new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'testdb',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
+            ]);
+            $sqlserver->pdo(); // Test connection
+            $connections[] = [$sqlserver];
+        } catch (\Throwable) {
+            // SQL Server not available, skip
         }
 
         // SQLite (always available)

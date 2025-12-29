@@ -27,6 +27,31 @@ class MigrationErrorTest extends TestCase
 {
     private string $migrationsDir;
 
+    /**
+     * Check if a table exists.
+     */
+    private function tableExists(ConnectionInterface $connection, string $tableName): bool
+    {
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+
+        $sql = match ($driver) {
+            'mysql' => 'SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?',
+            'pgsql' => "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?",
+            'sqlite' => "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?",
+            'sqlsrv' => "SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = ?",
+            default => throw new \RuntimeException("Unsupported database driver: {$driver}"),
+        };
+
+        $result = $connection->query($sql, [$tableName]);
+        if ($result === false || empty($result)) {
+            return false;
+        }
+
+        $count = is_object($result[0]) ? $result[0]->count : $result[0]['count'];
+
+        return (int) $count > 0;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -71,6 +96,7 @@ class MigrationErrorTest extends TestCase
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         // Empty SQL should succeed (no statements to execute)
         $migration->up($connection); // Should not throw
+        $this->assertTrue(true); // Verify no exception was thrown
     }
 
     public function test_sql_migration_execution_failure(): void
@@ -152,10 +178,8 @@ SQL;
         $migration->up($connection); // Should not throw
 
         // Verify both tables were created
-        $usersCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
-        $postsCheck = $connection->query('SELECT 1 FROM posts LIMIT 1');
-        $this->assertNotFalse($usersCheck);
-        $this->assertNotFalse($postsCheck);
+        $this->assertTrue($this->tableExists($connection, 'users'));
+        $this->assertTrue($this->tableExists($connection, 'posts'));
     }
 
     public function test_sql_migration_with_strings_containing_semicolons(): void
@@ -195,6 +219,8 @@ SQL;
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
+        // Verify table was created with escaped quotes
+        $this->assertTrue($this->tableExists($connection, 'test'));
     }
 
     public function test_sql_migration_with_mixed_quotes(): void
@@ -212,6 +238,8 @@ SQL;
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
+        // Verify table was created with mixed quotes
+        $this->assertTrue($this->tableExists($connection, 'test'));
     }
 
     public function test_sql_migration_with_nested_block_comments(): void
@@ -233,6 +261,9 @@ SQL;
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
+        // Verify both tables were created despite comments
+        $this->assertTrue($this->tableExists($connection, 'test'));
+        $this->assertTrue($this->tableExists($connection, 'test2'));
     }
 
     public function test_migration_manager_migration_failure(): void
@@ -376,6 +407,8 @@ SQL;
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
+        // Verify table was created despite trailing comment
+        $this->assertTrue($this->tableExists($connection, 'test'));
     }
 
     public function test_sql_migration_with_only_comments(): void
@@ -395,6 +428,8 @@ SQL;
 
         $migration = new Migration('20240101120000', 'Test', $basePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
+        // Verify no exception was thrown (no statements to execute, just comments)
+        $this->assertTrue(true);
     }
 
     public function test_sql_migration_path_with_extension(): void
@@ -411,7 +446,12 @@ SQL;
 
         $migration = new Migration('20240101120000', 'Test', $filePath, MigrationType::SQL);
         $migration->up($connection); // Should not throw
+        // Verify table was created
+        $this->assertTrue($this->tableExists($connection, 'test'));
+
         $migration->down($connection); // Should not throw
+        // Verify table was dropped
+        $this->assertFalse($this->tableExists($connection, 'test'));
     }
 
     /**

@@ -22,7 +22,7 @@ use Databoss\EscapeMode;
  * Handles database operations for tracking migration versions.
  * Manages the migrations table and tracks which migrations have been executed.
  *
- * Supports MySQL, PostgreSQL, and SQLite databases.
+ * Supports MySQL, PostgreSQL, SQLite, and Microsoft SQL Server databases.
  * The migrations table is automatically created on first use if it doesn't exist.
  */
 class MigrationRepository
@@ -69,6 +69,7 @@ class MigrationRepository
             'mysql' => $this->getMysqlTableSql(),
             'pgsql' => $this->getPostgresTableSql(),
             'sqlite' => $this->getSqliteTableSql(),
+            'sqlsrv' => $this->getSqlServerTableSql(),
             default => throw new \RuntimeException("Unsupported database driver: {$driver}"),
         };
 
@@ -169,6 +170,7 @@ class MigrationRepository
             'mysql' => $this->checkMysqlTableExists(),
             'pgsql' => $this->checkPostgresTableExists(),
             'sqlite' => $this->checkSqliteTableExists(),
+            'sqlsrv' => $this->checkSqlServerTableExists(),
             default => throw new \RuntimeException("Unsupported database driver: {$driver}"),
         };
     }
@@ -206,6 +208,18 @@ class MigrationRepository
     {
         return $this->checkTableExists(
             "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?"
+        );
+    }
+
+    /**
+     * Check if table exists in Microsoft SQL Server.
+     *
+     * @return bool True if table exists
+     */
+    private function checkSqlServerTableExists(): bool
+    {
+        return $this->checkTableExists(
+            "SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = ?"
         );
     }
 
@@ -273,6 +287,22 @@ class MigrationRepository
             version VARCHAR(255) NOT NULL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             executed_at DATETIME NOT NULL
+        )";
+    }
+
+    /**
+     * Get Microsoft SQL Server table creation SQL.
+     *
+     * @return string SQL statement to create migrations table
+     */
+    private function getSqlServerTableSql(): string
+    {
+        $table = $this->connection->escape($this->getTableName(), EscapeMode::COLUMN_OR_TABLE);
+
+        return "CREATE TABLE {$table} (
+            version NVARCHAR(255) NOT NULL PRIMARY KEY,
+            name NVARCHAR(255) NOT NULL,
+            executed_at DATETIME2 NOT NULL
         )";
     }
 }

@@ -47,15 +47,39 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        ports:
+          - 1433:1433
+        env:
+          ACCEPT_EULA: "Y"
+          SA_PASSWORD: "YourStrong!Passw0rd"
+          MSSQL_PID: "Developer"
+        options: >-
+          --health-cmd "exit 0"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install unixodbc (Linux/macOS requirement)
+        run: |
+          sudo apt-get update
+          sudo apt-get install unixodbc -y
+
+      - name: Install sqlcmd
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+          echo "/opt/mssql-tools18/bin" >> $GITHUB_PATH
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-version }}
-          extensions: pdo, pdo_mysql, pdo_pgsql, pdo_sqlite
+          extensions: pdo, pdo_mysql, pdo_pgsql, pdo_sqlite, pdo_sqlsrv
           coverage: xdebug
           tools: composer
 
@@ -73,6 +97,29 @@ jobs:
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Install database clients
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y default-mysql-client postgresql-client
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          echo "Waiting for SQL Server..."
+          for i in {1..60}; do
+            if sqlcmd \
+              -S 127.0.0.1 \
+              -U sa \
+              -P 'YourStrong!Passw0rd' \
+              -C \
+              -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready in time"
+          exit 1
 
       - name: Run tests
         run: ./vendor/bin/phpunit --testsuite vaibhavpandeyvpz/kram

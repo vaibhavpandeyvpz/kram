@@ -29,6 +29,31 @@ class MigrationManagerTest extends TestCase
     private string $migrationsDir;
 
     /**
+     * Check if a table exists.
+     */
+    private function tableExists(ConnectionInterface $connection, string $tableName): bool
+    {
+        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
+
+        $sql = match ($driver) {
+            'mysql' => 'SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?',
+            'pgsql' => "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?",
+            'sqlite' => "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?",
+            'sqlsrv' => "SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = ?",
+            default => throw new \RuntimeException("Unsupported database driver: {$driver}"),
+        };
+
+        $result = $connection->query($sql, [$tableName]);
+        if ($result === false || empty($result)) {
+            return false;
+        }
+
+        $count = is_object($result[0]) ? $result[0]->count : $result[0]['count'];
+
+        return (int) $count > 0;
+    }
+
+    /**
      * Clean up migrations table before each test.
      */
     private function cleanupMigrationsTable(ConnectionInterface $connection, ?string $tableName = null): void
@@ -39,8 +64,8 @@ class MigrationManagerTest extends TestCase
         try {
             $escapedTable = $connection->escape($table, \Databoss\EscapeMode::COLUMN_OR_TABLE);
             match ($driver) {
-                'mysql', 'pgsql' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
-                'sqlite' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                'mysql', 'pgsql', 'sqlite' => $connection->execute("DROP TABLE IF EXISTS {$escapedTable}"),
+                'sqlsrv' => $connection->execute("IF OBJECT_ID('{$escapedTable}', 'U') IS NOT NULL DROP TABLE {$escapedTable}"),
                 default => null,
             };
         } catch (\Throwable) {
@@ -57,8 +82,10 @@ class MigrationManagerTest extends TestCase
         $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
 
         // For PostgreSQL, use CASCADE to drop dependent objects
+        // For SQL Server, use IF OBJECT_ID check
         $dropSql = match ($driver) {
             'pgsql' => "DROP TABLE IF EXISTS {$escapedTable} CASCADE",
+            'sqlsrv' => "IF OBJECT_ID('{$escapedTable}', 'U') IS NOT NULL DROP TABLE {$escapedTable}",
             default => "DROP TABLE IF EXISTS {$escapedTable}",
         };
 
@@ -143,8 +170,7 @@ class MigrationManagerTest extends TestCase
         $this->assertEquals('20240101120000', $result->executed[0]);
 
         // Verify table was created
-        $tableCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
-        $this->assertNotFalse($tableCheck);
+        $this->assertTrue($this->tableExists($connection, 'users'));
     }
 
     /**
@@ -163,8 +189,7 @@ class MigrationManagerTest extends TestCase
         $this->assertCount(1, $result->executed);
 
         // Verify table was created
-        $tableCheck = $connection->query('SELECT 1 FROM users LIMIT 1');
-        $this->assertNotFalse($tableCheck);
+        $this->assertTrue($this->tableExists($connection, 'users'));
     }
 
     /**
@@ -222,14 +247,8 @@ class MigrationManagerTest extends TestCase
         $this->assertCount(1, $result->rolledBack);
         $this->assertEquals('20240101120001', $result->rolledBack[0]);
 
-        // Verify posts table was dropped - query should fail
-        try {
-            $connection->query('SELECT 1 FROM posts LIMIT 1');
-            $this->fail('Table should not exist');
-        } catch (\PDOException) {
-            // Expected - table doesn't exist
-            $this->assertTrue(true);
-        }
+        // Verify posts table was dropped
+        $this->assertFalse($this->tableExists($connection, 'posts'));
     }
 
     /**
@@ -287,14 +306,7 @@ class MigrationManagerTest extends TestCase
 
         // Verify custom table was created
         $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
-        $tableExists = match ($driver) {
-            'mysql' => $connection->query('SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [$customTable]) !== false,
-            'pgsql' => $connection->query("SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?", [$customTable]) !== false,
-            'sqlite' => $connection->query("SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?", [$customTable]) !== false,
-            default => false,
-        };
-
-        $this->assertTrue($tableExists);
+        $this->assertTrue($this->tableExists($connection, $customTable));
     }
 
     /**
@@ -389,6 +401,42 @@ PHP;
             $connections[] = [$postgres];
         } catch (\Throwable) {
             // PostgreSQL not available, skip
+        }
+
+        // SQL Server (skip if not available)
+        try {
+            // First connect to master to create testdb if it doesn't exist
+            $masterConnection = new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'master',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
+            ]);
+            $masterConnection->pdo(); // Test connection
+            // Create testdb if it doesn't exist
+            try {
+                $masterConnection->execute("IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'testdb') CREATE DATABASE testdb");
+            } catch (\Throwable) {
+                // Database might already exist, ignore
+            }
+
+            // Now connect to testdb
+            $sqlserver = new Connection([
+                Connection::OPT_DRIVER => DatabaseDriver::SQLSRV->value,
+                Connection::OPT_HOST => '127.0.0.1',
+                Connection::OPT_PORT => 1433,
+                Connection::OPT_DATABASE => 'testdb',
+                Connection::OPT_USERNAME => 'sa',
+                Connection::OPT_PASSWORD => 'YourStrong!Passw0rd',
+                Connection::OPT_TRUST_SERVER_CERTIFICATE => true,
+            ]);
+            $sqlserver->pdo(); // Test connection
+            $connections[] = [$sqlserver];
+        } catch (\Throwable) {
+            // SQL Server not available, skip
         }
 
         // SQLite (always available)
