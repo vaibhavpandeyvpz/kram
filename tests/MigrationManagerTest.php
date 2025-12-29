@@ -56,7 +56,7 @@ class MigrationManagerTest extends TestCase
         $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
         $escapedTable = $connection->escape($tableName, \Databoss\EscapeMode::COLUMN_OR_TABLE);
 
-        // For PostgreSQL, use CASCADE to drop dependent objects and ensure it's committed
+        // For PostgreSQL, use CASCADE to drop dependent objects
         $dropSql = match ($driver) {
             'pgsql' => "DROP TABLE IF EXISTS {$escapedTable} CASCADE",
             default => "DROP TABLE IF EXISTS {$escapedTable}",
@@ -64,10 +64,6 @@ class MigrationManagerTest extends TestCase
 
         try {
             $connection->execute($dropSql);
-            // For PostgreSQL, wait a bit to ensure the drop is committed
-            if ($driver === 'pgsql') {
-                usleep(100000); // 100ms
-            }
         } catch (\Throwable) {
             // Ignore errors
         }
@@ -78,40 +74,14 @@ class MigrationManagerTest extends TestCase
      */
     private function cleanupAll(ConnectionInterface $connection): void
     {
-        $driver = $connection->pdo()->getAttribute(\PDO::ATTR_DRIVER_NAME);
-
         // Clean up migrations table first
         $this->cleanupMigrationsTable($connection);
 
-        // Clean up test tables with verification for PostgreSQL
-        $tables = ['users', 'posts', 'comments', 'test'];
-        foreach ($tables as $table) {
-            $this->cleanupTable($connection, $table);
-
-            // For PostgreSQL, verify table is actually gone
-            if ($driver === 'pgsql') {
-                $maxAttempts = 3;
-                for ($i = 0; $i < $maxAttempts; $i++) {
-                    try {
-                        $escapedTable = $connection->escape($table, \Databoss\EscapeMode::COLUMN_OR_TABLE);
-                        $connection->query("SELECT 1 FROM {$escapedTable} LIMIT 1");
-                        // Table still exists, try dropping again
-                        if ($i < $maxAttempts - 1) {
-                            $this->cleanupTable($connection, $table);
-                            usleep(100000); // 100ms
-                        }
-                    } catch (\PDOException) {
-                        // Table doesn't exist, we're good
-                        break;
-                    }
-                }
-            }
-        }
-
-        // For PostgreSQL, wait a bit longer to ensure all drops are committed
-        if ($driver === 'pgsql') {
-            usleep(150000); // 150ms
-        }
+        // Clean up test tables
+        $this->cleanupTable($connection, 'users');
+        $this->cleanupTable($connection, 'posts');
+        $this->cleanupTable($connection, 'comments');
+        $this->cleanupTable($connection, 'test');
     }
 
     protected function setUp(): void

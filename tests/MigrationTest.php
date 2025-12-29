@@ -43,10 +43,6 @@ class MigrationTest extends TestCase
 
         try {
             $connection->execute($dropSql);
-            // For PostgreSQL, wait a bit to ensure the drop is committed
-            if ($driver === 'pgsql') {
-                usleep(100000); // 100ms
-            }
         } catch (\Throwable) {
             // Ignore errors
         }
@@ -354,9 +350,6 @@ SQL;
 
         // Ensure table is dropped if it exists
         $this->cleanupTable($connection, $tableName);
-
-        // Wait a bit to ensure cleanup is complete (especially for PostgreSQL)
-        usleep(50000); // 50ms
 
         $sql = <<<SQL
 CREATE TABLE {$tableName} (id INT PRIMARY KEY, name VARCHAR(255));
